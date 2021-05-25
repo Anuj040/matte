@@ -37,3 +37,15 @@ jobs:
         with:
           path: .venv
           key: ${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Format check with isort
+        run: poetry run isort --profile black --check  .
+
+      - name: Format check with black
+        run: poetry run black --config pyproject.toml --check .
+
+      - name: Run linter
+        run: make lint
