@@ -1,0 +1,9 @@
+# Directories
+datasets/
+.venv/
+
+# VS files
+*.code-workspace
+
+# Binaries
+*DS_Store
