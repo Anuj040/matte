@@ -7,3 +7,7 @@ datasets/
 
 # Binaries
 *DS_Store
+*__pycache__
+
+# Poetry
+poetry.lock
