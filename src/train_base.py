@@ -28,10 +28,12 @@ class CoarseMatte:
         self.model = MattingBase("resnet50").to(DEVICE)
 
     def generators(self) -> DataGenerator:
+        """method to prepare and return generator objects in one place"""
         train_set = DataGenerator()
         return train_set(shuffle=True, batch_size=2, num_workers=8, pin_memory=True)
 
     def train(self):
+        """model train method"""
         optimizer = Adam(
             [
                 {"params": self.model.backbone.parameters(), "lr": 1e-4},
@@ -39,23 +41,19 @@ class CoarseMatte:
                 {"params": self.model.decoder.parameters(), "lr": 5e-4},
             ]
         )
-        scaler = GradScaler()
+        scaler = GradScaler(enabled=torch.cuda.is_available())
 
         # Logging and checkpoints
         if not os.path.exists("checkpoint/matting_base"):
             os.makedirs("checkpoint/matting_base")
         writer = SummaryWriter("log/matting_base")
 
-        train_set = DataGenerator()
-        train_loader = train_set(
-            shuffle=True, batch_size=2, num_workers=8, pin_memory=True
-        )
-        # train_loader = self.generators()
+        train_loader = self.generators()
 
         # Run loop
         for epoch in range(0, 10):
             for i, ((true_pha, true_fgr), true_bgr) in enumerate(tqdm(train_loader)):
-                step = epoch * len(train_loader) + i
+                step = epoch * len(train_loader) + i + 1
 
                 true_pha = true_pha.to(DEVICE)
                 true_fgr = true_fgr.to(DEVICE)
@@ -108,7 +106,7 @@ class CoarseMatte:
                     )(true_bgr[aug_affine_idx])
                 del aug_affine_idx
 
-                with autocast():
+                with autocast(enabled=torch.cuda.is_available()):
                     pred_pha, pred_fgr, pred_err = self.model(true_src, true_bgr)[:3]
                     loss = compute_loss(
                         pred_pha, pred_fgr, pred_err, true_pha, true_fgr
@@ -117,12 +115,13 @@ class CoarseMatte:
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
+
                 optimizer.zero_grad()
 
                 if (i + 1) % 10 == 0:
                     writer.add_scalar("loss", loss, step)
 
-                if (i + 1) % 2000 == 0:
+                if (i + 1) % 90 == 0:
                     writer.add_image(
                         "train_pred_pha", make_grid(pred_pha, nrow=5), step
                     )
@@ -148,7 +147,7 @@ class CoarseMatte:
         #     if (i + 1) % args.log_valid_interval == 0:
         #         valid(model, dataloader_valid, writer, step)
 
-        #     if (step + 1) % args.checkpoint_interval == 0:
+        #     if step % args.checkpoint_interval == 0:
         #         torch.save(
         #             model.state_dict(),
         #             f"checkpoint/{args.model_name}/epoch-{epoch}-iter-{step}.pth",
