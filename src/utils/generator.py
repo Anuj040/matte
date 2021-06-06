@@ -62,8 +62,15 @@ class ImagesDataset(Dataset):
         Returns:
             torch.Tensor
         """
-        with Image.open(self.filenames[idx]) as img:
-            img = img.convert(self.mode)
+        # Custom mode for getting alpha matter
+        if self.mode == "A":
+            with Image.open(self.filenames[idx]) as img:
+                img = img.convert("RGBA")
+                img = img.split()[-1]
+
+        else:
+            with Image.open(self.filenames[idx]) as img:
+                img = img.convert(self.mode)
 
         if self.transforms:
             img = self.transforms(img)
@@ -141,7 +148,7 @@ class DataGenerator:
                     ZipDataset(
                         [
                             # Dataset object for alpha mattes
-                            ImagesDataset(DATA_PATH[dataset][mode]["pha"], mode="L"),
+                            ImagesDataset(DATA_PATH[dataset][mode]["pha"], mode="A"),
                             # Dataset object for foregrounds
                             ImagesDataset(DATA_PATH[dataset][mode]["fgr"], mode="RGB"),
                         ],
@@ -227,7 +234,23 @@ class DataGenerator:
 if __name__ == "__main__":
     train_set = DataGenerator()
     train_loader = train_set(shuffle=True, batch_size=2, num_workers=8, pin_memory=True)
-    for item in train_loader:
-        pass
-        # print(item)
-        # exit()
+
+    for (true_pha, true_fgr), true_bgr in train_loader:
+        # pass
+        print(true_pha.size())
+        src = true_fgr * true_pha + true_bgr * (1 - true_pha)
+        alpha = T.ToPILImage()(true_pha[0])
+        fgr = T.ToPILImage()(true_fgr[0])
+        bgr = T.ToPILImage()(true_bgr[0])
+        src = T.ToPILImage()(src[0])
+
+        img = alpha.convert("RGB")
+        img.save("alpha.png")
+        img = src.convert("RGB")
+        img.save("src.png")
+        img = bgr.convert("RGB")
+        img.save("bgr.png")
+        img = fgr.convert("RGB")
+        img.save("fgr.png")
+
+        exit()
