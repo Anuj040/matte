@@ -7,6 +7,7 @@ from torch import nn
 from torch.nn import functional as F
 
 
+# pylint: disable = all
 class Refiner(nn.Module):
     """
     Refiner refines the coarse output to full resolution.
