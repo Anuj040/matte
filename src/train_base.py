@@ -18,7 +18,7 @@ from utils.generator import DataGenerator
 # check if cuda available
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# pylint: disable = no-member
+# pylint: disable = no-member, too-many-arguments, too-many-locals
 
 
 class CoarseMatte:
