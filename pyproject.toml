@@ -8,10 +8,11 @@ authors = ["Anuj Arora <anujarora920804@gmail.com>"]
 python = "^3.8"
 Pillow = "^8.2.0"
 numpy = "^1.20.3"
-torch = "1.7.0"
-torchvision = "0.8.1"
 tqdm = "^4.61.0"
 kornia = "0.4.1"
+torch = "^1.9.0"
+torchvision = "^0.10.0"
+tensorboard = "^2.6.0"
 
 [tool.poetry.dev-dependencies]
 black = "^21.5b0"
