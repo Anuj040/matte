@@ -133,16 +133,31 @@ class ZipDataset(Dataset):
 class DataGenerator:
     """Datagenerator class"""
 
-    def __init__(self, dataset: str = "PhotoMatte85", mode: str = "train") -> None:
+    def __init__(
+        self,
+        dataset: str = "PhotoMatte85",
+        mode: str = "train",
+        model_type: str = "base",
+    ) -> None:
         """instance initializer
 
         Args:
             dataset (str, optional): Dataset to use. Defaults to "PhotoMatte85".
             mode (str, optional): Data is to be used for (train, val, etc.). Defaults to "train".
+            model_type (str, opt): refined or coarse alpha matte
         """
+        assert model_type in ["base", "refine"]
+
+        if model_type == "base":
+            size = (512, 512)
+            scale = (0.4, 1)
+        elif model_type == "refine":
+            size = (2048, 2048)
+            scale = (0.3, 1)
 
         # Training DataLoader
         if mode == "train":
+
             _dataset = ZipDataset(
                 [
                     ZipDataset(
@@ -155,10 +170,10 @@ class DataGenerator:
                         transforms=A.PairCompose(
                             [
                                 A.PairRandomAffineAndResize(
-                                    (512, 512),
+                                    size,
                                     degrees=(-5, 5),
                                     translate=(0.1, 0.1),
-                                    scale=(0.4, 1),
+                                    scale=scale,
                                     shear=(-5, 5),
                                 ),
                                 A.PairRandomHorizontalFlip(),
@@ -181,7 +196,7 @@ class DataGenerator:
                         transforms=T.Compose(
                             [
                                 A.RandomAffineAndResize(
-                                    (512, 512),
+                                    size,
                                     degrees=(-5, 5),
                                     translate=(0.1, 0.1),
                                     scale=(1, 2),

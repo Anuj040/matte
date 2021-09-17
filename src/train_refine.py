@@ -27,7 +27,7 @@ class FineMatte:
 
     def generators(self) -> DataGenerator:
         """method to prepare and return generator objects in one place"""
-        train_set = DataGenerator()
+        train_set = DataGenerator(model_type="refine")
         return train_set(shuffle=True, batch_size=2, num_workers=8, pin_memory=True)
 
     def train(self):
