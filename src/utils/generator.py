@@ -223,6 +223,7 @@ class DataGenerator:
             batch_size=batch_size,
             num_workers=num_workers,
             pin_memory=pin_memory,
+            drop_last=True,
         )
         return dataloader
 

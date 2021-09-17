@@ -1,1 +1,1 @@
-from .model import MattingBase
+from .model import MattingBase, MattingRefine

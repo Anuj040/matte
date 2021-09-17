@@ -11,7 +11,7 @@ import math
 import random
 
 import torch
-from PIL import Image, ImageFilter
+from PIL import ImageFilter
 from torchvision import transforms as T
 from torchvision.transforms import functional as F
 
@@ -67,7 +67,9 @@ class PairRandomAffine(T.RandomAffine):
         resamples=None,
         fillcolor=0,
     ):
-        super().__init__(degrees, translate, scale, shear, Image.NEAREST, fillcolor)
+        super().__init__(
+            degrees, translate, scale, shear, T.InterpolationMode.NEAREST, fillcolor
+        )
         self.resamples = resamples
 
     def __call__(self, *x):
@@ -149,7 +151,7 @@ class PairRandomAffineAndResize:
         translate,
         scale,
         shear,
-        resample=Image.BILINEAR,
+        resample=T.InterpolationMode.BILINEAR,
         fillcolor=0,
     ):
         self.size = size
