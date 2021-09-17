@@ -130,6 +130,48 @@ class ZipDataset(Dataset):
         return sample
 
 
+class SampleDataset(Dataset):
+    """Dataset class to take a fixed sub-sample of the dataset
+
+    Args:
+        Dataset: Parent class
+    """
+
+    def __init__(self, dataset: Dataset, samples: int = None):
+
+        """instance initializer
+
+        Args:
+            dataset (Dataset): Dataset object
+            samples (int): Number of samples to return
+        """
+        if samples is None:
+            samples = len(dataset)
+
+        samples = min(samples, len(dataset))
+        self.dataset = dataset
+        self.indices = [i * int(len(dataset) / samples) for i in range(samples)]
+
+    def __len__(self) -> int:
+        """
+
+        Returns:
+            int: [description]
+        """
+        return len(self.indices)
+
+    def __getitem__(self, idx: int) -> torch.Tensor:
+        """method to return an element of the dataset
+
+        Args:
+            idx (int): element id
+
+        Returns:
+            torch.Tensor
+        """
+        return self.dataset[self.indices[idx]]
+
+
 class DataGenerator:
     """Datagenerator class"""
 
@@ -212,6 +254,47 @@ class DataGenerator:
                     ),
                 ]
             )
+        elif mode == "valid":
+            _dataset = ZipDataset(
+                [
+                    ZipDataset(
+                        [
+                            ImagesDataset(DATA_PATH[dataset][mode]["pha"], mode="A"),
+                            ImagesDataset(DATA_PATH[dataset][mode]["fgr"], mode="RGB"),
+                        ],
+                        transforms=A.PairCompose(
+                            [
+                                A.PairRandomAffineAndResize(
+                                    size,
+                                    degrees=(-5, 5),
+                                    translate=(0.1, 0.1),
+                                    scale=(0.3, 1),
+                                    shear=(-5, 5),
+                                ),
+                                A.PairApply(T.ToTensor()),
+                            ]
+                        ),
+                        assert_equal_length=True,
+                    ),
+                    ImagesDataset(
+                        DATA_PATH["backgrounds"][mode],
+                        mode="RGB",
+                        transforms=T.Compose(
+                            [
+                                A.RandomAffineAndResize(
+                                    size,
+                                    degrees=(-5, 5),
+                                    translate=(0.1, 0.1),
+                                    scale=(1, 1.2),
+                                    shear=(-5, 5),
+                                ),
+                                T.ToTensor(),
+                            ]
+                        ),
+                    ),
+                ]
+            )
+            _dataset = SampleDataset(_dataset, 20)
         self.dataset = _dataset
 
     def __call__(

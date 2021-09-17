@@ -30,7 +30,12 @@ class CoarseMatte:
     def generators(self) -> DataGenerator:
         """method to prepare and return generator objects in one place"""
         train_set = DataGenerator()
-        return train_set(shuffle=True, batch_size=2, num_workers=8, pin_memory=True)
+        train_generator = train_set(
+            shuffle=True, batch_size=2, num_workers=8, pin_memory=True
+        )
+        valid_set = DataGenerator(dataset="alphamatting", mode="valid")
+        valid_generator = valid_set()
+        return train_generator, valid_generator
 
     def train(self):
         """model train method"""
@@ -48,7 +53,7 @@ class CoarseMatte:
             os.makedirs("checkpoint/matting_base")
         writer = SummaryWriter("log/matting_base")
 
-        train_loader = self.generators()
+        train_loader, valid_loader = self.generators()
 
         # Run loop
         for epoch in range(0, 10):

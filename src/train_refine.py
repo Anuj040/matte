@@ -27,8 +27,16 @@ class FineMatte:
 
     def generators(self) -> DataGenerator:
         """method to prepare and return generator objects in one place"""
-        train_set = DataGenerator(model_type="refine")
-        return train_set(shuffle=True, batch_size=2, num_workers=8, pin_memory=True)
+        model_type = "refine"
+        train_set = DataGenerator(model_type=model_type)
+        train_generator = train_set(
+            shuffle=True, batch_size=2, num_workers=8, pin_memory=True
+        )
+        valid_set = DataGenerator(
+            dataset="alphamatting", mode="valid", model_type=model_type
+        )
+        valid_generator = valid_set()
+        return train_generator, valid_generator
 
     def train(self):
         """model train method"""
@@ -47,7 +55,7 @@ class FineMatte:
             os.makedirs("checkpoint/matting_refine")
         writer = SummaryWriter("log/matting_refine")
 
-        train_loader = self.generators()
+        train_loader, valid_loader = self.generators()
 
         # Run loop
         for epoch in range(0, 10):
