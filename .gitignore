@@ -2,6 +2,7 @@
 datasets/
 .venv/
 log/
+checkpoint/
 
 # VS files
 *.code-workspace
