@@ -1,4 +1,5 @@
 """module for training model base"""
+import datetime
 import os
 import random
 from typing import Tuple
@@ -21,9 +22,7 @@ from utils.generator import DataGenerator
 # check if cuda available
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# pylint: disable = no-member, too-many-arguments, too-many-locals
-
-
+# pylint: disable = no-member, too-many-arguments, too-many-locals, too-many-statements
 class CoarseMatte:
     """class for building, training coarse matte generator model"""
 
@@ -52,12 +51,14 @@ class CoarseMatte:
         scaler = GradScaler(enabled=torch.cuda.is_available())
 
         # Logging and checkpoints
-        if not os.path.exists("checkpoint/matting_base"):
-            os.makedirs("checkpoint/matting_base")
-        writer = SummaryWriter("log/matting_base")
+        now = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
+        if not os.path.exists(f"checkpoint/matting_base/{now}"):
+            os.makedirs(f"checkpoint/matting_base/{now}")
+        writer = SummaryWriter(f"log/matting_base/{now}")
 
         train_loader, valid_loader = self.generators()
-
+        # Initialize validation loss
+        valid_loss = 1e9
         # Run loop
         for epoch in range(0, 10):
             for i, ((true_pha, true_fgr), true_bgr) in enumerate(tqdm(train_loader)):
@@ -152,18 +153,14 @@ class CoarseMatte:
                 del true_pha, true_fgr, true_bgr
                 del pred_pha, pred_fgr, pred_err
 
-                if (i + 1) % 50 == 0:
-                    valid(self.model, valid_loader, writer, step)
+            current_val_loss = valid(self.model, valid_loader, writer, step)
 
-            # if step % args.checkpoint_interval == 0:
-            #     torch.save(
-            #         model.state_dict(),
-            #         f"checkpoint/{args.model_name}/epoch-{epoch}-iter-{step}.pth",
-            #     )
-
-        # torch.save(
-        #     model.state_dict(), f"checkpoint/{args.model_name}/epoch-{epoch}.pth"
-        # )
+            if current_val_loss < valid_loss:
+                valid_loss = current_val_loss
+                torch.save(
+                    self.model.state_dict(),
+                    f"checkpoint/matting_base/{now}/epoch-{epoch}-loss-{valid_loss:.4f}.pth",
+                )
 
 
 # --------------- Utils ---------------
@@ -195,7 +192,7 @@ def compute_loss(pred_pha, pred_fgr, pred_err, true_pha, true_fgr):
 
 def valid(
     model: nn.Module, dataloader: DataLoader, writer: SummaryWriter, step: int
-) -> None:
+) -> float:
     """model evaluation step executor
 
     Args:
@@ -203,6 +200,9 @@ def valid(
         dataloader (DataLoader): [description]
         writer (SummaryWriter): [description]
         step (int): [description]
+
+    Returns:
+        float: validation loss
     """
 
     model.eval()
@@ -224,6 +224,7 @@ def valid(
 
     writer.add_scalar("valid_loss", loss_total / loss_count, step)
     model.train()
+    return loss_total / loss_count
 
 
 if __name__ == "__main__":

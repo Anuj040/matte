@@ -1,4 +1,5 @@
 """module for training refinement model"""
+import datetime
 import os
 import random
 
@@ -20,7 +21,7 @@ from utils.generator import DataGenerator
 # check if cuda available
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# pylint: disable = too-many-arguments, no-member, too-many-locals
+# pylint: disable = too-many-arguments, no-member, too-many-locals, too-many-statements
 class FineMatte:
     """class for building, training refined matte generator model"""
 
@@ -53,12 +54,14 @@ class FineMatte:
         scaler = GradScaler(enabled=torch.cuda.is_available())
 
         # Logging and checkpoints
-        if not os.path.exists("checkpoint/matting_refine"):
-            os.makedirs("checkpoint/matting_refine")
-        writer = SummaryWriter("log/matting_refine")
+        now = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
+        if not os.path.exists(f"checkpoint/matting_refine/{now}"):
+            os.makedirs(f"checkpoint/matting_refine/{now}")
+        writer = SummaryWriter(f"log/matting_refine/{now}")
 
         train_loader, valid_loader = self.generators()
-
+        # Initialize validation loss
+        valid_loss = 1e9
         # Run loop
         for epoch in range(0, 10):
             for i, ((true_pha, true_fgr), true_bgr) in enumerate(tqdm(train_loader)):
@@ -162,8 +165,14 @@ class FineMatte:
                 del true_pha, true_fgr, true_src, true_bgr
                 del pred_pha, pred_fgr, pred_pha_sm, pred_fgr_sm, pred_err_sm
 
-                if (i + 1) % 50 == 0:
-                    valid(self.model, valid_loader, writer, step)
+            current_val_loss = valid(self.model, valid_loader, writer, step)
+
+            if current_val_loss < valid_loss:
+                valid_loss = current_val_loss
+                torch.save(
+                    self.model.state_dict(),
+                    f"checkpoint/matting_refine/{now}/epoch-{epoch}-loss-{valid_loss:.4f}.pth",
+                )
 
 
 # --------------- Utils ---------------
@@ -213,7 +222,7 @@ def random_crop(*imgs):
 
 def valid(
     model: nn.Module, dataloader: DataLoader, writer: SummaryWriter, step: int
-) -> None:
+) -> float:
     """model evaluation step executor
 
     Args:
@@ -221,7 +230,11 @@ def valid(
         dataloader (DataLoader): [description]
         writer (SummaryWriter): [description]
         step (int): [description]
+
+    Returns:
+        float: validation loss
     """
+
     model.eval()
     loss_total = 0
     loss_count = 0
@@ -251,6 +264,7 @@ def valid(
 
     writer.add_scalar("valid_loss", loss_total / loss_count, step)
     model.train()
+    return loss_total / loss_count
 
 
 if __name__ == "__main__":
