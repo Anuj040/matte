@@ -9,7 +9,7 @@ from .refiner import Refiner
 from .resnet import ResNetEncoder
 
 
-# pylint: disable = invalid-name, arguments-differ
+# pylint: disable = invalid-name, arguments-differ, too-few-public-methods
 class Base(nn.Module):
     """
     A generic implementation of the base encoder-decoder network inspired by DeepLab.
@@ -28,7 +28,16 @@ class Base(nn.Module):
         else:
             raise NotImplementedError(f"{backbone} backbone has not been implemented")
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """forward pass execute
+
+        Args:
+            x (torch.Tensor)
+
+        Returns:
+            torch.Tensor
+        """
+
         x, *shortcuts = self.backbone(x)
         x = self.aspp(x)
         x = self.decoder(x, *shortcuts)

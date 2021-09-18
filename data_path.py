@@ -23,8 +23,13 @@ DATA_PATH = {
         "train": {
             "fgr": "datasets/PhotoMatte85/train",
             "pha": "datasets/PhotoMatte85/train",
-        },
-        "valid": {"fgr": "PATH_TO_IMAGES_DIR", "pha": "PATH_TO_IMAGES_DIR"},
+        }
+    },
+    "alphamatting": {
+        "valid": {
+            "fgr": "datasets/alphamatting/valid",
+            "pha": "datasets/alphamatting/valid",
+        }
     },
     "backgrounds": {
         "train": "datasets/backgrounds/train",

@@ -4,9 +4,11 @@ import random
 
 import kornia
 import torch
+from torch import nn
 from torch.cuda.amp import GradScaler, autocast
 from torch.nn import functional as F
 from torch.optim import Adam
+from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms as T
 from torchvision.utils import make_grid
@@ -27,8 +29,16 @@ class FineMatte:
 
     def generators(self) -> DataGenerator:
         """method to prepare and return generator objects in one place"""
-        train_set = DataGenerator()
-        return train_set(shuffle=True, batch_size=2, num_workers=8, pin_memory=True)
+        model_type = "refine"
+        train_set = DataGenerator(model_type=model_type)
+        train_generator = train_set(
+            shuffle=True, batch_size=2, num_workers=8, pin_memory=True
+        )
+        valid_set = DataGenerator(
+            dataset="alphamatting", mode="valid", model_type=model_type
+        )
+        valid_generator = valid_set()
+        return train_generator, valid_generator
 
     def train(self):
         """model train method"""
@@ -47,7 +57,7 @@ class FineMatte:
             os.makedirs("checkpoint/matting_refine")
         writer = SummaryWriter("log/matting_refine")
 
-        train_loader = self.generators()
+        train_loader, valid_loader = self.generators()
 
         # Run loop
         for epoch in range(0, 10):
@@ -152,6 +162,9 @@ class FineMatte:
                 del true_pha, true_fgr, true_src, true_bgr
                 del pred_pha, pred_fgr, pred_pha_sm, pred_fgr_sm, pred_err_sm
 
+                if (i + 1) % 50 == 0:
+                    valid(self.model, valid_loader, writer, step)
+
 
 # --------------- Utils ---------------
 
@@ -196,6 +209,48 @@ def random_crop(*imgs):
         img = kornia.center_crop(img, (h_tgt, w_tgt))
         results.append(img)
     return results
+
+
+def valid(
+    model: nn.Module, dataloader: DataLoader, writer: SummaryWriter, step: int
+) -> None:
+    """model evaluation step executor
+
+    Args:
+        model (nn.Module): [description]
+        dataloader (DataLoader): [description]
+        writer (SummaryWriter): [description]
+        step (int): [description]
+    """
+    model.eval()
+    loss_total = 0
+    loss_count = 0
+    with torch.no_grad():
+        for (true_pha, true_fgr), true_bgr in dataloader:
+            batch_size = true_pha.size(0)
+
+            true_pha = true_pha.to(DEVICE)
+            true_fgr = true_fgr.to(DEVICE)
+            true_bgr = true_bgr.to(DEVICE)
+            true_src = true_pha * true_fgr + (1 - true_pha) * true_bgr
+
+            pred_pha, pred_fgr, pred_pha_sm, pred_fgr_sm, pred_err_sm, _ = model(
+                true_src, true_bgr
+            )
+            loss = compute_loss(
+                pred_pha,
+                pred_fgr,
+                pred_pha_sm,
+                pred_fgr_sm,
+                pred_err_sm,
+                true_pha,
+                true_fgr,
+            )
+            loss_total += loss.cpu().item() * batch_size
+            loss_count += batch_size
+
+    writer.add_scalar("valid_loss", loss_total / loss_count, step)
+    model.train()
 
 
 if __name__ == "__main__":
