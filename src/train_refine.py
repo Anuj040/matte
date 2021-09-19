@@ -16,12 +16,13 @@ from torchvision.utils import make_grid
 from tqdm import tqdm
 
 from src.model import MattingRefine
+from src.utils.augmentation import train_step_augmenter
 from src.utils.generator import define_generators
 
 # check if cuda available
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# pylint: disable = too-many-arguments, no-member, too-many-locals, too-many-statements
+# pylint: disable = too-many-arguments, too-many-locals, too-many-statements
 class FineMatte:
     """class for building, training refined matte generator model"""
 
@@ -77,44 +78,8 @@ class FineMatte:
                 # Composite foreground onto source
                 true_src = true_fgr * true_pha + true_src * (1 - true_pha)
 
-                # Augment with noise
-                aug_noise_idx = torch.rand(len(true_src)) < 0.4
-                if aug_noise_idx.any():
-                    true_src[aug_noise_idx] = (
-                        true_src[aug_noise_idx]
-                        .add_(
-                            torch.randn_like(true_src[aug_noise_idx]).mul_(
-                                0.03 * random.random()
-                            )
-                        )
-                        .clamp_(0, 1)
-                    )
-                    true_bgr[aug_noise_idx] = (
-                        true_bgr[aug_noise_idx]
-                        .add_(
-                            torch.randn_like(true_bgr[aug_noise_idx]).mul_(
-                                0.03 * random.random()
-                            )
-                        )
-                        .clamp_(0, 1)
-                    )
-                del aug_noise_idx
-
-                # Augment background with jitter
-                aug_jitter_idx = torch.rand(len(true_src)) < 0.8
-                if aug_jitter_idx.any():
-                    true_bgr[aug_jitter_idx] = kornia.augmentation.ColorJitter(
-                        0.18, 0.18, 0.18, 0.1
-                    )(true_bgr[aug_jitter_idx])
-                del aug_jitter_idx
-
-                # Augment background with affine
-                aug_affine_idx = torch.rand(len(true_bgr)) < 0.3
-                if aug_affine_idx.any():
-                    true_bgr[aug_affine_idx] = T.RandomAffine(
-                        degrees=(-1, 1), translate=(0.01, 0.01)
-                    )(true_bgr[aug_affine_idx])
-                del aug_affine_idx
+                # Implement train step augmentations
+                true_src, true_bgr = train_step_augmenter(true_src, true_bgr)
 
                 with autocast(enabled=torch.cuda.is_available()):
                     (

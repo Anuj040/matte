@@ -357,10 +357,10 @@ def define_generators(
 
 
 if __name__ == "__main__":
-    train_set = DataGenerator()
-    train_loader = train_set(shuffle=True, batch_size=2, num_workers=8, pin_memory=True)
+    DATASET = DataGenerator()
+    LOADER = DATASET(shuffle=True, batch_size=2, num_workers=8, pin_memory=True)
 
-    for (true_pha, true_fgr), true_bgr in train_loader:
+    for (true_pha, true_fgr), true_bgr in LOADER:
         # pass
         print(true_pha.size())
         src = true_fgr * true_pha + true_bgr * (1 - true_pha)
@@ -369,13 +369,13 @@ if __name__ == "__main__":
         bgr = T.ToPILImage()(true_bgr[0])
         src = T.ToPILImage()(src[0])
 
-        img = alpha.convert("RGB")
-        img.save("alpha.png")
-        img = src.convert("RGB")
-        img.save("src.png")
-        img = bgr.convert("RGB")
-        img.save("bgr.png")
-        img = fgr.convert("RGB")
-        img.save("fgr.png")
+        IMG = alpha.convert("RGB")
+        IMG.save("alpha.png")
+        IMG = src.convert("RGB")
+        IMG.save("src.png")
+        IMG = bgr.convert("RGB")
+        IMG.save("bgr.png")
+        IMG = fgr.convert("RGB")
+        IMG.save("fgr.png")
 
-        exit()
+        sys.exit()

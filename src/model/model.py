@@ -9,7 +9,7 @@ from .refiner import Refiner
 from .resnet import ResNetEncoder
 
 
-# pylint: disable = invalid-name, arguments-differ, too-few-public-methods
+# pylint: disable = invalid-name, arguments-differ, too-few-public-methods, too-many-arguments
 class Base(nn.Module):
     """
     A generic implementation of the base encoder-decoder network inspired by DeepLab.
@@ -91,16 +91,18 @@ class MattingRefine(MattingBase):
 
     Args:
         backbone: ["resnet50", "resnet101", "mobilenetv2"]
-        backbone_scale: The image downsample scale for passing through backbone, default 1/4 or 0.25.
+        backbone_scale: Image downsample scale for passing through backbone, default 1/4 or 0.25.
                         Must not be greater than 1/2.
         refine_mode: refine area selection mode. Options:
             "full"         - No area selection, refine everywhere using regular Conv2d.
             "sampling"     - Refine fixed amount of pixels ranked by the top most errors.
             "thresholding" - Refine varying amount of pixels that has more error than the threshold.
         refine_sample_pixels: number of pixels to refine. Only used when mode == "sampling".
-        refine_threshold: error threshold ranged from 0 ~ 1. Refine where err > threshold. Only used when mode == "thresholding".
+        refine_threshold: error threshold (0-1). Refine where err > threshold.
+                         Used with mode == "thresholding".
         refine_kernel_size: the refiner's convolutional kernel size. Options: [1, 3]
-        refine_prevent_oversampling: prevent sampling more pixels than needed for sampling mode. Set False only for speedtest.
+        refine_prevent_oversampling: prevent sampling more pixels than needed for sampling mode.
+                            Set False only for speedtest.
     Input:
         src: (B, 3, H, W) the source image. Channels are RGB values normalized to 0 ~ 1.
         bgr: (B, 3, H, W) the background image. Channels are RGB values normalized to 0 ~ 1.
@@ -109,13 +111,15 @@ class MattingRefine(MattingBase):
         pha: (B, 1, H, W) the alpha prediction. Normalized to 0 ~ 1.
         fgr: (B, 3, H, W) the foreground prediction. Channels are RGB values normalized to 0 ~ 1.
         pha_sm: (B, 1, Hc, Wc) the coarse alpha prediction from matting base. Normalized to 0 ~ 1.
-        fgr_sm: (B, 3, Hc, Hc) the coarse foreground prediction from matting base. Normalized to 0 ~ 1.
+        fgr_sm: (B, 3, Hc, Hc) coarse foreground prediction from matting base. Normalized to 0 ~ 1.
         err_sm: (B, 1, Hc, Wc) the coarse error prediction from matting base. Normalized to 0 ~ 1.
-        ref_sm: (B, 1, H/4, H/4) the quarter resolution refinement map. 1 indicates refined 4x4 patch locations.
+        ref_sm: (B, 1, H/4, H/4) quarter resolution refinement map. 1: refined 4x4 patch location.
 
     Example:
-        model = MattingRefine(backbone='resnet50', backbone_scale=1/4, refine_mode='sampling', refine_sample_pixels=80_000)
-        model = MattingRefine(backbone='resnet50', backbone_scale=1/4, refine_mode='thresholding', refine_threshold=0.1)
+        model = MattingRefine(backbone='resnet50', backbone_scale=1/4, refine_mode='sampling',
+                refine_sample_pixels=80_000)
+        model = MattingRefine(backbone='resnet50', backbone_scale=1/4, refine_mode='thresholding',
+                refine_threshold=0.1)
         model = MattingRefine(backbone='resnet50', backbone_scale=1/4, refine_mode='full')
 
         pha, fgr, pha_sm, fgr_sm, err_sm, ref_sm = model(src, bgr)   # for training
