@@ -2,6 +2,7 @@
 import datetime
 import os
 import random
+from typing import Tuple
 
 import kornia
 import torch
@@ -15,8 +16,8 @@ from torchvision import transforms as T
 from torchvision.utils import make_grid
 from tqdm import tqdm
 
-from model import MattingRefine
-from utils.generator import DataGenerator
+from src.model import MattingRefine
+from src.utils.generator import DataGenerator
 
 # check if cuda available
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -28,21 +29,31 @@ class FineMatte:
     def __init__(self) -> None:
         self.model = MattingRefine("resnet50").to(DEVICE)
 
-    def generators(self) -> DataGenerator:
-        """method to prepare and return generator objects in one place"""
+    def generators(self, num_workers: int = 8) -> Tuple[DataLoader]:
+        """method to prepare and return generator objects in one place
+
+        Args:
+            num_workers (int, optional): Number of cpu workers for generators.
+        """
+
         model_type = "refine"
         train_set = DataGenerator(model_type=model_type)
         train_generator = train_set(
-            shuffle=True, batch_size=2, num_workers=8, pin_memory=True
+            shuffle=True, batch_size=2, num_workers=num_workers, pin_memory=True
         )
         valid_set = DataGenerator(
             dataset="alphamatting", mode="valid", model_type=model_type
         )
-        valid_generator = valid_set()
+        valid_generator = valid_set(num_workers=num_workers)
         return train_generator, valid_generator
 
-    def train(self):
-        """model train method"""
+    def train(self, num_workers: int = 8) -> None:
+        """model train method
+
+        Args:
+            num_workers (int, optional): Number of cpu workers for generators.
+        """
+
         optimizer = Adam(
             [
                 {"params": self.model.backbone.parameters(), "lr": 5e-5},
@@ -59,7 +70,7 @@ class FineMatte:
             os.makedirs(f"checkpoint/matting_refine/{now}")
         writer = SummaryWriter(f"log/matting_refine/{now}")
 
-        train_loader, valid_loader = self.generators()
+        train_loader, valid_loader = self.generators(num_workers=num_workers)
         # Initialize validation loss
         valid_loss = 1e9
         # Run loop
