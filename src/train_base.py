@@ -29,25 +29,35 @@ class CoarseMatte:
     def __init__(self) -> None:
         self.model = MattingBase("resnet50").to(DEVICE)
 
-    def generators(self, num_workers: int = 8) -> Tuple[DataLoader]:
+    def generators(
+        self, batch_size: int = 2, num_workers: int = 8
+    ) -> Tuple[DataLoader]:
         """method to prepare and return generator objects in one place
 
         Args:
+            batch_size (int, optional): Defaults to 2.
             num_workers (int, optional): Number of cpu workers for generators.
         """
 
         train_set = DataGenerator()
         train_generator = train_set(
-            shuffle=True, batch_size=2, num_workers=num_workers, pin_memory=True
+            shuffle=True,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            pin_memory=True,
         )
         valid_set = DataGenerator(dataset="alphamatting", mode="valid")
-        valid_generator = valid_set(num_workers=num_workers)
+        valid_generator = valid_set(batch_size=batch_size, num_workers=num_workers)
         return train_generator, valid_generator
 
-    def train(self, num_workers: int = 8) -> None:
+    def train(
+        self, epochs: int = 10, batch_size: int = 2, num_workers: int = 8
+    ) -> None:
         """model train method
 
         Args:
+            epochs (int, optional): Training epochs. Defaults to 10.
+            batch_size (int, optional): Defaults to 2.
             num_workers (int, optional): Number of cpu workers for generators.
         """
 
@@ -66,11 +76,13 @@ class CoarseMatte:
             os.makedirs(f"checkpoint/matting_base/{now}")
         writer = SummaryWriter(f"log/matting_base/{now}")
 
-        train_loader, valid_loader = self.generators(num_workers=num_workers)
+        train_loader, valid_loader = self.generators(
+            batch_size, num_workers=num_workers
+        )
         # Initialize validation loss
         valid_loss = 1e9
         # Run loop
-        for epoch in range(0, 10):
+        for epoch in range(0, epochs):
             for i, ((true_pha, true_fgr), true_bgr) in enumerate(tqdm(train_loader)):
                 step = epoch * len(train_loader) + i + 1
 
