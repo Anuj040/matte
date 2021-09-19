@@ -2,7 +2,6 @@
 import datetime
 import os
 import random
-from typing import Tuple
 
 import kornia
 import torch
@@ -16,8 +15,8 @@ from torchvision import transforms as T
 from torchvision.utils import make_grid
 from tqdm import tqdm
 
-from model import MattingBase
-from utils.generator import DataGenerator
+from src.model import MattingBase
+from src.utils.generator import define_generators
 
 # check if cuda available
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -29,18 +28,17 @@ class CoarseMatte:
     def __init__(self) -> None:
         self.model = MattingBase("resnet50").to(DEVICE)
 
-    def generators(self) -> Tuple[DataLoader]:
-        """method to prepare and return generator objects in one place"""
-        train_set = DataGenerator()
-        train_generator = train_set(
-            shuffle=True, batch_size=2, num_workers=8, pin_memory=True
-        )
-        valid_set = DataGenerator(dataset="alphamatting", mode="valid")
-        valid_generator = valid_set()
-        return train_generator, valid_generator
+    def train(
+        self, epochs: int = 10, batch_size: int = 2, num_workers: int = 8
+    ) -> None:
+        """model train method
 
-    def train(self):
-        """model train method"""
+        Args:
+            epochs (int, optional): Training epochs. Defaults to 10.
+            batch_size (int, optional): Defaults to 2.
+            num_workers (int, optional): Number of cpu workers for generators.
+        """
+
         optimizer = Adam(
             [
                 {"params": self.model.backbone.parameters(), "lr": 1e-4},
@@ -56,11 +54,13 @@ class CoarseMatte:
             os.makedirs(f"checkpoint/matting_base/{now}")
         writer = SummaryWriter(f"log/matting_base/{now}")
 
-        train_loader, valid_loader = self.generators()
+        train_loader, valid_loader = define_generators(
+            "base", batch_size, num_workers=num_workers
+        )
         # Initialize validation loss
         valid_loss = 1e9
         # Run loop
-        for epoch in range(0, 10):
+        for epoch in range(0, epochs):
             for i, ((true_pha, true_fgr), true_bgr) in enumerate(tqdm(train_loader)):
                 step = epoch * len(train_loader) + i + 1
 

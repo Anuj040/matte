@@ -4,7 +4,7 @@ import sys
 
 import torch
 
-sys.path.append(("./"))
+sys.path.append("./")
 
 # pylint: disable = wrong-import-position, import-error
 from src.train_base import CoarseMatte
@@ -24,6 +24,9 @@ def common_parser() -> argparse.Namespace:
         "--model_type", default="base", type=str, choices=["base", "refine"]
     )
     parser.add_argument("--load_base", default=False, type=bool)
+    parser.add_argument("--num_workers", default=8, type=int)
+    parser.add_argument("--epochs", default=10, type=int)
+    parser.add_argument("--batch_size", default=2, type=int)
 
     return parser.parse_args()
 
@@ -51,7 +54,7 @@ def main() -> None:
             matte.model.load_state_dict(model_dict)
 
     if args.mode == "train":
-        matte.train()
+        matte.train(args.epochs, args.batch_size, num_workers=args.num_workers)
 
 
 if __name__ == "__main__":
