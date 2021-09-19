@@ -2,7 +2,7 @@
 import glob
 import os
 import sys
-from typing import List, Union
+from typing import List, Tuple, Union
 
 import numpy as np
 import torch
@@ -328,6 +328,32 @@ class DataGenerator:
     def __len__(self) -> int:
         """dataset size"""
         return len(self.dataset)
+
+
+def define_generators(
+    model_type: str, batch_size: int = 2, num_workers: int = 8
+) -> Tuple[DataLoader]:
+    """method to prepare and return generator objects in one place
+
+    Args:
+        model_type (str, opt): refined or coarse alpha matte
+        batch_size (int, optional): Defaults to 2.
+        num_workers (int, optional): Number of cpu workers for generators.
+    """
+    assert model_type in ["base", "refine"]
+
+    train_set = DataGenerator(model_type=model_type)
+    train_generator = train_set(
+        shuffle=True,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    valid_set = DataGenerator(
+        dataset="alphamatting", mode="valid", model_type=model_type
+    )
+    valid_generator = valid_set(batch_size=batch_size, num_workers=num_workers)
+    return train_generator, valid_generator
 
 
 if __name__ == "__main__":

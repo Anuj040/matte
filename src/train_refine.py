@@ -2,7 +2,6 @@
 import datetime
 import os
 import random
-from typing import Tuple
 
 import kornia
 import torch
@@ -17,7 +16,7 @@ from torchvision.utils import make_grid
 from tqdm import tqdm
 
 from src.model import MattingRefine
-from src.utils.generator import DataGenerator
+from src.utils.generator import define_generators
 
 # check if cuda available
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -28,30 +27,6 @@ class FineMatte:
 
     def __init__(self) -> None:
         self.model = MattingRefine("resnet50").to(DEVICE)
-
-    def generators(
-        self, batch_size: int = 2, num_workers: int = 8
-    ) -> Tuple[DataLoader]:
-        """method to prepare and return generator objects in one place
-
-        Args:
-            batch_size (int, optional): Defaults to 2.
-            num_workers (int, optional): Number of cpu workers for generators.
-        """
-
-        model_type = "refine"
-        train_set = DataGenerator(model_type=model_type)
-        train_generator = train_set(
-            shuffle=True,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            pin_memory=True,
-        )
-        valid_set = DataGenerator(
-            dataset="alphamatting", mode="valid", model_type=model_type
-        )
-        valid_generator = valid_set(batch_size=batch_size, num_workers=num_workers)
-        return train_generator, valid_generator
 
     def train(
         self, epochs: int = 10, batch_size: int = 2, num_workers: int = 8
@@ -80,8 +55,8 @@ class FineMatte:
             os.makedirs(f"checkpoint/matting_refine/{now}")
         writer = SummaryWriter(f"log/matting_refine/{now}")
 
-        train_loader, valid_loader = self.generators(
-            batch_size, num_workers=num_workers
+        train_loader, valid_loader = define_generators(
+            "refine", batch_size, num_workers=num_workers
         )
         # Initialize validation loss
         valid_loss = 1e9
