@@ -6,10 +6,11 @@ Example:
     img1, img2, ..., imgN = transforms(img1, img2, ..., imgN)
 """
 # pylint: disable = R0903: too-few-public-methods
-# pylint: disable = E1101: no-member
 import math
 import random
+from typing import Tuple
 
+import kornia
 import torch
 from PIL import ImageFilter
 from torchvision import transforms as T
@@ -198,3 +199,48 @@ class RandomAffineAndResize(PairRandomAffineAndResize):
 
     def __call__(self, img):
         return super().__call__(img)[0]
+
+
+def train_step_augmenter(src: torch.Tensor, bgr: torch.Tensor) -> Tuple[torch.Tensor]:
+    """train step augmentations for source (composite) and background image
+
+    Args:
+        src (torch.Tensor): source (composite) image
+        bgr (torch.Tensor): background image
+
+    Returns:
+        Tuple[torch.Tensor]: augmented source, bgr images
+    """
+
+    # Augment with noise
+    aug_noise_idx = torch.rand(len(src)) < 0.4
+    if aug_noise_idx.any():
+        src[aug_noise_idx] = (
+            src[aug_noise_idx]
+            .add_(torch.randn_like(src[aug_noise_idx]).mul_(0.03 * random.random()))
+            .clamp_(0, 1)
+        )
+        bgr[aug_noise_idx] = (
+            bgr[aug_noise_idx]
+            .add_(torch.randn_like(bgr[aug_noise_idx]).mul_(0.03 * random.random()))
+            .clamp_(0, 1)
+        )
+    del aug_noise_idx
+
+    # Augment background with jitter
+    aug_jitter_idx = torch.rand(len(bgr)) < 0.8
+    if aug_jitter_idx.any():
+        bgr[aug_jitter_idx] = kornia.augmentation.ColorJitter(0.18, 0.18, 0.18, 0.1)(
+            bgr[aug_jitter_idx]
+        )
+    del aug_jitter_idx
+
+    # Augment background with affine
+    aug_affine_idx = torch.rand(len(bgr)) < 0.3
+    if aug_affine_idx.any():
+        bgr[aug_affine_idx] = T.RandomAffine(degrees=(-1, 1), translate=(0.01, 0.01))(
+            bgr[aug_affine_idx]
+        )
+    del aug_affine_idx
+
+    return src, bgr

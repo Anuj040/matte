@@ -6,7 +6,6 @@ import torch
 
 sys.path.append("./")
 
-# pylint: disable = wrong-import-position, import-error
 from src.train_base import CoarseMatte
 from src.train_refine import FineMatte
 

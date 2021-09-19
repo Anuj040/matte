@@ -20,3 +20,5 @@ ignore=CVS
 # Files or directories matching the regex patterns are skipped. The regex
 # matches against base names, not paths.
 ignore-patterns=
+
+disable=E0611, E0401, C0413, E1101
