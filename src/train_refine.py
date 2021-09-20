@@ -1,7 +1,6 @@
 """module for training refinement model"""
 import datetime
 import os
-import random
 
 import kornia
 import torch
@@ -11,18 +10,17 @@ from torch.nn import functional as F
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms as T
 from torchvision.utils import make_grid
 from tqdm import tqdm
 
 from src.model import MattingRefine
-from src.utils.augmentation import train_step_augmenter
+from src.utils.augmentation import random_crop, train_step_augmenter
 from src.utils.generator import define_generators
 
 # check if cuda available
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# pylint: disable = too-many-arguments, too-many-locals, too-many-statements
+# pylint: disable = too-many-locals, too-many-statements
 class FineMatte:
     """class for building, training refined matte generator model"""
 
@@ -69,7 +67,9 @@ class FineMatte:
                 true_pha = true_pha.to(DEVICE)
                 true_fgr = true_fgr.to(DEVICE)
                 true_bgr = true_bgr.to(DEVICE)
-                true_pha, true_fgr, true_bgr = random_crop(true_pha, true_fgr, true_bgr)
+                true_pha, true_fgr, true_bgr = random_crop(
+                    1024, true_pha, true_fgr, true_bgr
+                )
 
                 true_src = true_bgr.clone()
 
@@ -167,20 +167,6 @@ def compute_loss(
             kornia.resize(pred_pha_sm, true_pha_lg.shape[2:]).sub(true_pha_lg).abs(),
         )
     )
-
-
-def random_crop(*imgs):
-    """method to take matching random crop out of the image set"""
-    h_src, w_src = imgs[0].shape[2:]
-    w_tgt = random.choice(range(1024, 2048)) // 4 * 4
-    h_tgt = random.choice(range(1024, 2048)) // 4 * 4
-    scale = max(w_tgt / w_src, h_tgt / h_src)
-    results = []
-    for img in imgs:
-        img = kornia.resize(img, (int(h_src * scale), int(w_src * scale)))
-        img = kornia.center_crop(img, (h_tgt, w_tgt))
-        results.append(img)
-    return results
 
 
 def valid(

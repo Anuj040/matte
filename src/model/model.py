@@ -9,7 +9,7 @@ from .refiner import Refiner
 from .resnet import ResNetEncoder
 
 
-# pylint: disable = invalid-name, arguments-differ, too-few-public-methods, too-many-arguments
+# pylint: disable = invalid-name, arguments-differ, too-few-public-methods
 class Base(nn.Module):
     """
     A generic implementation of the base encoder-decoder network inspired by DeepLab.
