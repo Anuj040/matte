@@ -105,10 +105,10 @@ class FineMatte:
 
                 optimizer.zero_grad()
 
-                if (i + 1) % 10 == 0:
+                if (i + 1) % int(10 * 2 / batch_size) == 0:
                     writer.add_scalar("loss", loss, step)
 
-                if (i + 1) % 90 == 0:
+                if (i + 1) % int(90 * 2 / batch_size) == 0:
                     writer.add_image(
                         "train_pred_pha", make_grid(pred_pha, nrow=5), step
                     )
