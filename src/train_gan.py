@@ -14,9 +14,14 @@ from tqdm import tqdm
 
 from src.model import MattingRefine
 from src.model.networks import NLayerDiscriminator
-from src.train_refine import compute_loss, valid
 from src.utils.augmentation import random_crop, train_step_augmenter
 from src.utils.generator import define_generators
+from src.utils.train_utils import (
+    compute_refine_loss,
+    gan_loss,
+    set_requires_grad,
+    valid,
+)
 
 # check if cuda available
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -106,7 +111,7 @@ class GANMatte:
                         pred_err_sm,
                         _,
                     ) = self.model(true_src, true_bgr)
-                    g_loss = compute_loss(
+                    g_loss = compute_refine_loss(
                         pred_pha,
                         pred_fgr,
                         pred_pha_sm,
@@ -175,7 +180,7 @@ class GANMatte:
                 del true_pha, true_fgr, true_src, true_bgr
                 del pred_pha, pred_fgr, pred_pha_sm, pred_fgr_sm, pred_err_sm
 
-            current_val_loss = valid(self.model, valid_loader, writer, step)
+            current_val_loss = valid(self.model, "refine", valid_loader, writer, step)
 
             if current_val_loss < valid_loss:
                 valid_loss = current_val_loss
@@ -183,29 +188,3 @@ class GANMatte:
                     self.model.state_dict(),
                     f"checkpoint/matting_gan/{now}/epoch-{epoch}-loss-{valid_loss:.4f}.pth",
                 )
-
-
-# --------------- Utils ---------------
-
-
-def set_requires_grad(nets, requires_grad=False):
-    """[summary]
-
-    Args:
-        nets ([type]): [description]
-        requires_grad (bool, optional): [description]. Defaults to False.
-    """
-    if not isinstance(nets, list):
-        nets = [nets]
-    for net in nets:
-        if net is not None:
-            for param in net.parameters():
-                param.requires_grad = requires_grad
-
-
-def gan_loss(judge_1: torch.Tensor, judge_2: torch.Tensor):
-    """loss calculating function"""
-    loss = torch.mean(
-        judge_1 - torch.mean(judge_2, dim=(0, 2, 3)) - 1.0, dim=0
-    ) + torch.mean(judge_2 - torch.mean(judge_1, dim=(0, 2, 3)) + 1.0, dim=0)
-    return torch.mean(loss)
