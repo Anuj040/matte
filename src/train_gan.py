@@ -126,11 +126,11 @@ class GANMatte:
                     pred_src = pred_fgr * pred_pha + true_bgr * (1 - pred_pha)
                     pred_d = torch.cat([pred_src, pred_pha], dim=1)
                     true_d = torch.cat([true_src, true_pha], dim=1)
-                    input_disc = kornia.resize(
-                        torch.cat([true_d, pred_d.detach()], dim=0),
-                        pred_pha_sm.shape[2:],
-                    )
-
+                    # input_disc = kornia.resize(
+                    #     torch.cat([true_d, pred_d.detach()], dim=0),
+                    #     pred_pha_sm.shape[2:],
+                    # )
+                    input_disc = torch.cat([true_d, pred_d.detach()], dim=0)
                     disc_judge = self.discrimintaor(input_disc.clone())
                     judge_true, judge_pred = torch.split(
                         disc_judge, dim=0, split_size_or_sections=2
