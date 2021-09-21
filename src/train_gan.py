@@ -6,6 +6,7 @@ import os
 import kornia
 import torch
 from torch import nn
+from torch.cuda.amp import GradScaler, autocast
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.utils import make_grid
@@ -52,6 +53,7 @@ class GANMatte:
             ]
         )
         d_optimizer = Adam(self.discrimintaor.parameters(), lr=1e-4)
+        scaler = GradScaler(enabled=torch.cuda.is_available())
 
         # Logging and checkpoints
         now = datetime.datetime.now().strftime("%d%m%Y_%H%M%S")
@@ -94,57 +96,61 @@ class GANMatte:
 
                 # Implement train step augmentations
                 true_src, true_bgr = train_step_augmenter(true_src, true_bgr)
+                with autocast(enabled=torch.cuda.is_available()):
 
-                (
-                    pred_pha,
-                    pred_fgr,
-                    pred_pha_sm,
-                    pred_fgr_sm,
-                    pred_err_sm,
-                    _,
-                ) = self.model(true_src, true_bgr)
-                g_loss = compute_loss(
-                    pred_pha,
-                    pred_fgr,
-                    pred_pha_sm,
-                    pred_fgr_sm,
-                    pred_err_sm,
-                    true_pha,
-                    true_fgr,
-                )
+                    (
+                        pred_pha,
+                        pred_fgr,
+                        pred_pha_sm,
+                        pred_fgr_sm,
+                        pred_err_sm,
+                        _,
+                    ) = self.model(true_src, true_bgr)
+                    g_loss = compute_loss(
+                        pred_pha,
+                        pred_fgr,
+                        pred_pha_sm,
+                        pred_fgr_sm,
+                        pred_err_sm,
+                        true_pha,
+                        true_fgr,
+                    )
 
-                # Judge by discriminator
-                # Composite foreground onto source (predicted)
-                pred_src = pred_fgr * pred_pha + true_bgr * (1 - pred_pha)
-                pred_d = torch.cat([pred_src, pred_pha], dim=1)
-                true_d = torch.cat([true_src, true_pha], dim=1)
-                input_disc = kornia.resize(
-                    torch.cat([true_d, pred_d.detach()], dim=0), pred_pha_sm.shape[2:]
-                )
+                    # Judge by discriminator
+                    # Composite foreground onto source (predicted)
+                    pred_src = pred_fgr * pred_pha + true_bgr * (1 - pred_pha)
+                    pred_d = torch.cat([pred_src, pred_pha], dim=1)
+                    true_d = torch.cat([true_src, true_pha], dim=1)
+                    input_disc = kornia.resize(
+                        torch.cat([true_d, pred_d.detach()], dim=0),
+                        pred_pha_sm.shape[2:],
+                    )
 
-                disc_judge = self.discrimintaor(input_disc.clone())
-                judge_true, judge_pred = torch.split(
-                    disc_judge, dim=0, split_size_or_sections=2
-                )
+                    disc_judge = self.discrimintaor(input_disc.clone())
+                    judge_true, judge_pred = torch.split(
+                        disc_judge, dim=0, split_size_or_sections=2
+                    )
 
-                g_loss_d = gan_loss(judge_pred, judge_true)
-
-                loss_g = g_loss + self.gan_weight * g_loss_d
-                loss_g.backward(retain_graph=True)
-                g_optimizer.step()
+                    g_loss_d = gan_loss(judge_pred, judge_true)
+                    loss_g = g_loss + self.gan_weight * g_loss_d
+                scaler.scale(loss_g).backward()
+                scaler.step(g_optimizer)
+                scaler.update()
 
                 #########################################
                 # train the discriminator
                 #########################################
                 set_requires_grad([self.discrimintaor], True)
                 d_optimizer.zero_grad()
-                disc_judge = self.discrimintaor(input_disc)
-                judge_true, judge_pred = torch.split(
-                    disc_judge, dim=0, split_size_or_sections=2
-                )
-                d_loss = gan_loss(judge_true, judge_pred)
-                d_loss.backward()
-                d_optimizer.step()
+                with autocast(enabled=torch.cuda.is_available()):
+                    disc_judge = self.discrimintaor(input_disc)
+                    judge_true, judge_pred = torch.split(
+                        disc_judge, dim=0, split_size_or_sections=2
+                    )
+                    loss_d = gan_loss(judge_true, judge_pred)
+                scaler.scale(loss_d).backward()
+                scaler.step(d_optimizer)
+                scaler.update()
 
                 if (i + 1) % int(10 * 2 / batch_size) == 0:
                     writer.add_scalar("loss", g_loss, step)
