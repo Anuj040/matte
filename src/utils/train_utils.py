@@ -6,6 +6,7 @@ from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from torchvision.utils import make_grid
 
 # check if cuda available
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -51,6 +52,31 @@ def compute_refine_loss(
     )
 
 
+def train_summary_writer(
+    pred_pha: torch.Tensor,
+    pred_fgr: torch.Tensor,
+    pred_err: torch.Tensor,
+    true_src: torch.Tensor,
+    writer: SummaryWriter,
+    step: int,
+) -> None:
+    """[summary]
+
+    Args:
+        pred_pha (torch.Tensor): predicted alpha matte
+        pred_fgr (torch.Tensor): predicted foreground
+        pred_err (torch.Tensor): predicted error map
+        true_src (torch.Tensor): input source (composite) image
+        writer (SummaryWriter):
+        step (int): train step
+    """
+    writer.add_image("train_pred_pha", make_grid(pred_pha, nrow=5), step)
+    writer.add_image("train_pred_fgr", make_grid(pred_fgr, nrow=5), step)
+    writer.add_image("train_pred_com", make_grid(pred_fgr * pred_pha, nrow=5), step)
+    writer.add_image("train_pred_err", make_grid(pred_err, nrow=5), step)
+    writer.add_image("train_true_src", make_grid(true_src, nrow=5), step)
+
+
 # pylint: disable = too-many-locals
 def valid(
     model: nn.Module,
@@ -64,9 +90,9 @@ def valid(
     Args:
         model_type (str, opt): refined or coarse alpha matte
         model (nn.Module): [description]
-        dataloader (DataLoader): [description]
-        writer (SummaryWriter): [description]
-        step (int): [description]
+        dataloader (DataLoader):
+        writer (SummaryWriter):
+        step (int): train step
 
     Returns:
         float: validation loss
@@ -89,8 +115,6 @@ def valid(
                 loss = compute_base_loss(
                     pred_pha, pred_fgr, pred_err, true_pha, true_fgr
                 )
-                loss_total += loss.cpu().item() * batch_size
-                loss_count += batch_size
             elif model_type == "refine":
                 pred_pha, pred_fgr, pred_pha_sm, pred_fgr_sm, pred_err_sm, _ = model(
                     true_src, true_bgr
@@ -104,6 +128,8 @@ def valid(
                     true_pha,
                     true_fgr,
                 )
+            loss_total += loss.cpu().item() * batch_size
+            loss_count += batch_size
 
     writer.add_scalar("valid_loss", loss_total / loss_count, step)
     model.train()

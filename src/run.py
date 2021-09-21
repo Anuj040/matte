@@ -25,7 +25,7 @@ def common_parser() -> argparse.Namespace:
     )
     parser.add_argument("--load_base", default=False, type=bool)
     parser.add_argument("--num_workers", default=8, type=int)
-    parser.add_argument("--n_layers", default=1, type=int)
+    parser.add_argument("--n_layers", default=4, type=int)
     parser.add_argument("--epochs", default=10, type=int)
     parser.add_argument("--batch_size", default=2, type=int)
 

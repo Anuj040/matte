@@ -6,13 +6,12 @@ import torch
 from torch.cuda.amp import GradScaler, autocast
 from torch.optim import Adam
 from torch.utils.tensorboard import SummaryWriter
-from torchvision.utils import make_grid
 from tqdm import tqdm
 
 from src.model import MattingRefine
 from src.utils.augmentation import random_crop, train_step_augmenter
 from src.utils.generator import define_generators
-from src.utils.train_utils import compute_refine_loss, valid
+from src.utils.train_utils import compute_refine_loss, train_summary_writer, valid
 
 # check if cuda available
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -106,20 +105,8 @@ class FineMatte:
                     writer.add_scalar("loss", loss, step)
 
                 if (i + 1) % int(90 * 2 / batch_size) == 0:
-                    writer.add_image(
-                        "train_pred_pha", make_grid(pred_pha, nrow=5), step
-                    )
-                    writer.add_image(
-                        "train_pred_fgr", make_grid(pred_fgr, nrow=5), step
-                    )
-                    writer.add_image(
-                        "train_pred_com", make_grid(pred_fgr * pred_pha, nrow=5), step
-                    )
-                    writer.add_image(
-                        "train_pred_err", make_grid(pred_err_sm, nrow=5), step
-                    )
-                    writer.add_image(
-                        "train_true_src", make_grid(true_src, nrow=5), step
+                    train_summary_writer(
+                        pred_pha, pred_fgr, pred_err_sm, true_src, writer, step
                     )
 
                 del true_pha, true_fgr, true_src, true_bgr
