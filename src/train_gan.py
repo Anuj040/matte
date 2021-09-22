@@ -30,12 +30,25 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 class GANMatte:
     """class for building, training refined matte generator model"""
 
-    def __init__(self, n_layers: int = 1, gan_weight: float = 0.002) -> None:
+    def __init__(
+        self,
+        n_layers: int = 1,
+        gan_weight: float = 0.002,
+        weight_decay: float = 0.0,
+    ) -> None:
+        """Class Initialization
+
+        Args:
+            n_layers (int, optional): Number of Conv layers for discriminator. Defaults to 1.
+            gan_weight (float, optional): gan loss weight. Defaults to 0.002.
+            weight_decay (float, optional): regaluraizer paramter. Defaults to 0.0.
+        """
         self.model = MattingRefine("resnet50").to(DEVICE)
         self.discrimintaor = NLayerDiscriminator(
             input_nc=4, n_layers=n_layers, norm_layer=nn.BatchNorm2d
         ).to(DEVICE)
         self.gan_weight = gan_weight
+        self.weight_decay = weight_decay
 
     def train(
         self, epochs: int = 10, batch_size: int = 2, num_workers: int = 8
@@ -47,17 +60,18 @@ class GANMatte:
             batch_size (int, optional): Defaults to 2.
             num_workers (int, optional): Number of cpu workers for generators.
         """
-        # TODO check the impace of weight decay paramerter
-        # weight_decay=0.0005
         g_optimizer = Adam(
             [
                 {"params": self.model.backbone.parameters(), "lr": 5e-5},
                 {"params": self.model.aspp.parameters(), "lr": 5e-5},
                 {"params": self.model.decoder.parameters(), "lr": 1e-4},
                 {"params": self.model.refiner.parameters(), "lr": 3e-4},
-            ]
+            ],
+            weight_decay=self.weight_decay,
         )
-        d_optimizer = Adam(self.discrimintaor.parameters(), lr=1e-4)
+        d_optimizer = Adam(
+            self.discrimintaor.parameters(), lr=1e-4, weight_decay=self.weight_decay
+        )
         scaler = GradScaler(enabled=torch.cuda.is_available())
 
         # Logging and checkpoints
@@ -126,11 +140,10 @@ class GANMatte:
                     pred_src = pred_fgr * pred_pha + true_bgr * (1 - pred_pha)
                     pred_d = torch.cat([pred_src, pred_pha], dim=1)
                     true_d = torch.cat([true_src, true_pha], dim=1)
-                    # input_disc = kornia.resize(
-                    #     torch.cat([true_d, pred_d.detach()], dim=0),
-                    #     pred_pha_sm.shape[2:],
-                    # )
-                    input_disc = torch.cat([true_d, pred_d.detach()], dim=0)
+                    input_disc = kornia.resize(
+                        torch.cat([true_d, pred_d.detach()], dim=0),
+                        pred_pha_sm.shape[2:],
+                    )
                     disc_judge = self.discrimintaor(input_disc.clone())
                     judge_true, judge_pred = torch.split(
                         disc_judge, dim=0, split_size_or_sections=2
