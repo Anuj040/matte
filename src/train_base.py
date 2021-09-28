@@ -1,28 +1,23 @@
 """module for training model base"""
 import datetime
 import os
-import random
 
-import kornia
 import torch
-from torch import nn
 from torch.cuda.amp import GradScaler, autocast
-from torch.nn import functional as F
 from torch.optim import Adam
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torchvision import transforms as T
 from torchvision.utils import make_grid
 from tqdm import tqdm
 
 from src.model import MattingBase
-from src.utils.augmentation import train_step_augmenter
+from src.utils.augmentation import random_crop, train_step_augmenter
 from src.utils.generator import define_generators
+from src.utils.train_utils import compute_base_loss, train_summary_writer, valid
 
 # check if cuda available
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# pylint: disable = too-many-arguments, too-many-locals, too-many-statements
+# pylint: disable = too-many-locals, too-many-statements
 class CoarseMatte:
     """class for building, training coarse matte generator model"""
 
@@ -68,7 +63,9 @@ class CoarseMatte:
                 true_pha = true_pha.to(DEVICE)
                 true_fgr = true_fgr.to(DEVICE)
                 true_bgr = true_bgr.to(DEVICE)
-                true_pha, true_fgr, true_bgr = random_crop(true_pha, true_fgr, true_bgr)
+                true_pha, true_fgr, true_bgr = random_crop(
+                    256, true_pha, true_fgr, true_bgr
+                )
 
                 true_src = true_bgr.clone()
 
@@ -82,7 +79,7 @@ class CoarseMatte:
 
                 with autocast(enabled=torch.cuda.is_available()):
                     pred_pha, pred_fgr, pred_err = self.model(true_src, true_bgr)[:3]
-                    loss = compute_loss(
+                    loss = compute_base_loss(
                         pred_pha, pred_fgr, pred_err, true_pha, true_fgr
                     )
 
@@ -92,24 +89,12 @@ class CoarseMatte:
 
                 optimizer.zero_grad()
 
-                if (i + 1) % 10 == 0:
+                if (i + 1) % int(10 * 2 / batch_size) == 0:
                     writer.add_scalar("loss", loss, step)
 
-                if (i + 1) % 90 == 0:
-                    writer.add_image(
-                        "train_pred_pha", make_grid(pred_pha, nrow=5), step
-                    )
-                    writer.add_image(
-                        "train_pred_fgr", make_grid(pred_fgr, nrow=5), step
-                    )
-                    writer.add_image(
-                        "train_pred_com", make_grid(pred_fgr * pred_pha, nrow=5), step
-                    )
-                    writer.add_image(
-                        "train_pred_err", make_grid(pred_err, nrow=5), step
-                    )
-                    writer.add_image(
-                        "train_true_src", make_grid(true_src, nrow=5), step
+                if (i + 1) % int(90 * 2 / batch_size) == 0:
+                    train_summary_writer(
+                        pred_pha, pred_fgr, pred_err, true_src, writer, step
                     )
                     writer.add_image(
                         "train_true_bgr", make_grid(true_bgr, nrow=5), step
@@ -118,7 +103,7 @@ class CoarseMatte:
                 del true_pha, true_fgr, true_bgr
                 del pred_pha, pred_fgr, pred_err
 
-            current_val_loss = valid(self.model, valid_loader, writer, step)
+            current_val_loss = valid(self.model, "base", valid_loader, writer, step)
 
             if current_val_loss < valid_loss:
                 valid_loss = current_val_loss
@@ -126,70 +111,6 @@ class CoarseMatte:
                     self.model.state_dict(),
                     f"checkpoint/matting_base/{now}/epoch-{epoch}-loss-{valid_loss:.4f}.pth",
                 )
-
-
-# --------------- Utils ---------------
-
-
-def random_crop(*imgs):
-    """method to take matching random crop out of the image set"""
-    width = random.choice(range(256, 512))
-    height = random.choice(range(256, 512))
-    results = []
-    for img in imgs:
-        img = kornia.resize(img, (max(height, width), max(height, width)))
-        img = kornia.center_crop(img, (height, width))
-        results.append(img)
-    return results
-
-
-def compute_loss(pred_pha, pred_fgr, pred_err, true_pha, true_fgr):
-    """loss calculating function"""
-    true_err = torch.abs(pred_pha.detach() - true_pha)
-    true_msk = true_pha != 0
-    return (
-        F.l1_loss(pred_pha, true_pha)
-        + F.l1_loss(kornia.sobel(pred_pha), kornia.sobel(true_pha))
-        + F.l1_loss(pred_fgr * true_msk, true_fgr * true_msk)
-        + F.mse_loss(pred_err, true_err)
-    )
-
-
-def valid(
-    model: nn.Module, dataloader: DataLoader, writer: SummaryWriter, step: int
-) -> float:
-    """model evaluation step executor
-
-    Args:
-        model (nn.Module): [description]
-        dataloader (DataLoader): [description]
-        writer (SummaryWriter): [description]
-        step (int): [description]
-
-    Returns:
-        float: validation loss
-    """
-
-    model.eval()
-    loss_total = 0
-    loss_count = 0
-    with torch.no_grad():
-        for (true_pha, true_fgr), true_bgr in dataloader:
-            batch_size = true_pha.size(0)
-
-            true_pha = true_pha.to(DEVICE)
-            true_fgr = true_fgr.to(DEVICE)
-            true_bgr = true_bgr.to(DEVICE)
-            true_src = true_pha * true_fgr + (1 - true_pha) * true_bgr
-
-            pred_pha, pred_fgr, pred_err = model(true_src, true_bgr)[:3]
-            loss = compute_loss(pred_pha, pred_fgr, pred_err, true_pha, true_fgr)
-            loss_total += loss.cpu().item() * batch_size
-            loss_count += batch_size
-
-    writer.add_scalar("valid_loss", loss_total / loss_count, step)
-    model.train()
-    return loss_total / loss_count
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ Example:
 # pylint: disable = R0903: too-few-public-methods
 import math
 import random
-from typing import Tuple
+from typing import List, Tuple
 
 import kornia
 import torch
@@ -144,7 +144,6 @@ class PairRandomSharpen(RandomSharpen):
 class PairRandomAffineAndResize:
     """Applies same random Affine and resize tranform to pair of images"""
 
-    # pylint: disable = R0913 # too-many-arguments
     def __init__(
         self,
         size,
@@ -199,6 +198,20 @@ class RandomAffineAndResize(PairRandomAffineAndResize):
 
     def __call__(self, img):
         return super().__call__(img)[0]
+
+
+def random_crop(size_range: int, *imgs) -> List[torch.Tensor]:
+    """method to take matching random crop out of the image set"""
+    h_src, w_src = imgs[0].shape[2:]
+    w_tgt = random.choice(range(size_range, 2 * size_range)) // 4 * 4
+    h_tgt = random.choice(range(size_range, 2 * size_range)) // 4 * 4
+    scale = max(w_tgt / w_src, h_tgt / h_src)
+    results = []
+    for img in imgs:
+        img = kornia.resize(img, (int(h_src * scale), int(w_src * scale)))
+        img = kornia.center_crop(img, (h_tgt, w_tgt))
+        results.append(img)
+    return results
 
 
 def train_step_augmenter(src: torch.Tensor, bgr: torch.Tensor) -> Tuple[torch.Tensor]:
